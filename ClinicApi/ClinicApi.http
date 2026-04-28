@@ -1,6 +1,44 @@
 @ClinicApi_HostAddress = http://localhost:5174
-
-GET {{ClinicApi_HostAddress}}/weatherforecast/
+### 1. Test GetAll
+GET {{ClinicApi_HostAddress}}/api/Appointments
 Accept: application/json
 
-###
+### 2. Post Dodanie nowej wizyty 
+POST {{ClinicApi_HostAddress}}/api/Appointments
+Content-Type: application/json
+
+{
+  "idPatient": 1,
+  "idDoctor": 1,
+  "appointmentDate": "2026-05-15T10:30:00",
+  "reason": "Nowa wizyta kontrolna - ból pleców"
+}
+
+### 3. Put - Aktualizacja istniejace wizyty
+PUT {{ClinicApi_HostAddress}}/api/Appointments/1
+Content-Type: application/json
+
+{
+  "idPatient": 1,
+  "idDoctor": 1,
+  "appointmentDate": "2026-05-20T14:00:00",
+  "status": "Scheduled",
+  "reason": "Zmiana terminu konsultacji",
+  "internalNotes": "Pacjent zadzwonił i poprosił o późniejszą godzinę"
+}
+
+### 4. PUT (TEST BŁĘDU) - Próba zmiany daty zakończonej wizyty (ID 4)
+PUT {{ClinicApi_HostAddress}}/api/Appointments/4
+Content-Type: application/json
+
+{
+  "idPatient": 1,
+  "idDoctor": 1,
+  "appointmentDate": "2026-06-01T12:00:00",
+  "status": "Completed",
+  "reason": "Próba zmiany daty po fakcie",
+  "internalNotes": "To nie powinno przejść!"
+}
+
+### 5. DELETE (TEST BŁĘDU) - Próba usunięcia zakończonej wizyty (ID 4)
+DELETE {{ClinicApi_HostAddress}}/api/Appointments/4
