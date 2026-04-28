@@ -63,6 +63,52 @@ public class AppointmentsController(IAppointmentsService services) : ControllerB
         [FromBody] UpdateAppointmentRequestDto updateAppointmentRequestDto,
         CancellationToken cancellationToken = default)
     {
-        return null;
+        try
+        {
+            await services.UpdateAppointmentAsync(id, updateAppointmentRequestDto, cancellationToken);
+            return NoContent();
+        }
+        catch (NotFoundException e)
+        {
+            var error = new ErrorResponseDto() { Message = e.Message };
+            return NotFound(error);
+        }
+        catch (ConflictException e)
+        {
+            var error = new ErrorResponseDto() {  Message = e.Message };
+            return Conflict(error);
+        }
+        catch (Exception e)
+        {
+            var error = new ErrorResponseDto { Message = e.Message };
+            return StatusCode(500, error);
+        }
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteAsync([FromRoute] int id,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await services.RemoveAsync(id, cancellationToken);
+            return NoContent();
+        }
+        catch (NotFoundException e)
+        {
+            var error = new ErrorResponseDto() { Message = e.Message };
+            return NotFound(error);
+        }
+        catch (ConflictException e)
+        {
+            var error = new ErrorResponseDto() { Message = e.Message };
+            return Conflict(error);
+        }
+        catch (Exception e)
+        {
+            var error = new ErrorResponseDto { Message = e.Message };
+            return StatusCode(500, error);
+        }
+        
     }
 }

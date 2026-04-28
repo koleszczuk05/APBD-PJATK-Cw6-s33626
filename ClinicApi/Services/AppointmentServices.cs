@@ -252,15 +252,149 @@ public class AppointmentServices(IConfiguration configuration) : IAppointmentsSe
         
     }
 
-    public async Task UpdateAsync(int id, UpdateAppointmentRequestDto updateAppointmentRequestDto,
+    public async Task UpdateAppointmentAsync(int id, UpdateAppointmentRequestDto updateAppointmentRequestDto,
         CancellationToken cancellationToken = default)
     {
+        if (updateAppointmentRequestDto.Status != "Scheduled" && updateAppointmentRequestDto.Status != "Cancelled" &&
+            updateAppointmentRequestDto.Status != "Completed")
+        {
+            throw new ConflictException("This Status is not permitted");
+        }
+        
         await using var connection = new SqlConnection(configuration.GetConnectionString("DefaultConnection"));
         await using var command = new SqlCommand();
         
         command.Connection = connection;
         await command.Connection.OpenAsync(cancellationToken);
+
+        command.CommandText = "select Status, AppointmentDate from Appointments where IdAppointment = @IdAppointment;";
+        command.Parameters.AddWithValue("@IdAppointment", id);
         
+        string currentStatus;
+        DateTime currentDate;
+
+        using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                throw new NotFoundException("Appointment does not exist");
+            }
+            currentStatus = reader.GetString(0);
+            currentDate = reader.GetDateTime(1);
+        }
         
+        command.Parameters.Clear();
+
+        command.CommandText = "select 1 from Patients where IdPatient = @IdPatient and IsActive = 1;";
+        command.Parameters.AddWithValue("@IdPatient", updateAppointmentRequestDto.IdPatient);
+        
+        var existsPatient = await command.ExecuteScalarAsync(cancellationToken);
+        if (existsPatient is null)
+        {
+            throw new NotFoundException("Patient does not exist");
+        }
+        command.Parameters.Clear();
+        
+        command.CommandText = "select 1 from Doctors where IdDoctor = @IdDoctor and IsActive = 1;";
+        command.Parameters.AddWithValue("@IdDoctor", updateAppointmentRequestDto.IdDoctor);
+        
+        var existsDoctor = await command.ExecuteScalarAsync(cancellationToken);
+        if (existsDoctor is null)
+        {
+            throw new NotFoundException("Doctor does not exist");
+        }
+
+        command.Parameters.Clear();
+        
+        if (currentStatus == "Completed" && currentDate != updateAppointmentRequestDto.AppointmentDate)
+        {
+            throw new ConflictException("Appointment is already completed and you are trying to change the date");    
+        }
+        
+        command.CommandText = "select 1 from Appointments where IdDoctor = @IdDoctor and AppointmentDate = @AppointmentDate and IdAppointment <> @IdAppointment;";
+        command.Parameters.AddWithValue("@IdDoctor", updateAppointmentRequestDto.IdDoctor);
+        command.Parameters.AddWithValue("@AppointmentDate", updateAppointmentRequestDto.AppointmentDate);
+        command.Parameters.AddWithValue("@IdAppointment", id);
+        
+        var existsVisit = await command.ExecuteScalarAsync(cancellationToken);
+
+        if (existsVisit is not null)
+        {
+            throw new ConflictException("Doctor already has a visit in this time");
+        }
+        
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        command.Transaction = (SqlTransaction)transaction;
+        try
+        {
+            command.CommandText = """
+                                  update Appointments set
+                                  IdPatient = @IdPatient,
+                                  IdDoctor = @IdDoctor,
+                                  AppointmentDate = @AppointmentDate,
+                                  Status = @Status,
+                                  Reason = @Reason,
+                                  InternalNotes = @InternalNotes
+                                  where IdAppointment = @Id;
+                                  """;
+
+            command.Parameters.AddWithValue("@IdPatient", updateAppointmentRequestDto.IdPatient);
+            command.Parameters.AddWithValue("@IdDoctor", updateAppointmentRequestDto.IdDoctor);
+            command.Parameters.AddWithValue("@AppointmentDate", updateAppointmentRequestDto.AppointmentDate);
+            command.Parameters.AddWithValue("@Status", updateAppointmentRequestDto.Status);
+            command.Parameters.AddWithValue("@Reason", updateAppointmentRequestDto.Reason);
+            command.Parameters.AddWithValue("@InternalNotes", (object)updateAppointmentRequestDto.InternalNotes ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Id", id);
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task RemoveAsync(int id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqlConnection(configuration.GetConnectionString("DefaultConnection"));
+        await using var command = new SqlCommand();
+        command.Connection = connection;
+        await command.Connection.OpenAsync(cancellationToken);
+        
+        command.CommandText = "select Status from Appointments where IdAppointment = @IdAppointment;";
+        command.Parameters.AddWithValue("@IdAppointment", id);
+        var CurrentStatus = await command.ExecuteScalarAsync(cancellationToken);
+        if (CurrentStatus is null)
+        {
+            throw new NotFoundException("Appointment does not exist");
+        }
+
+        if (CurrentStatus.ToString() == "Completed")
+        {
+            throw new ConflictException("Cannot delete a completed appointment");
+        }
+        
+        command.Parameters.Clear();
+        
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        command.Transaction = (SqlTransaction)transaction;
+
+        try
+        {
+            command.CommandText = "delete from Appointments where IdAppointment =  @IdAppointment;";
+            command.Parameters.AddWithValue("IdAppointment", id);
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
     }
 }
