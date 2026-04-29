@@ -1,44 +1,108 @@
 @ClinicApi_HostAddress = http://localhost:5174
-### 1. Test GetAll
+
+### 1. GET - Pobierz wszystkie wizyty
 GET {{ClinicApi_HostAddress}}/api/Appointments
 Accept: application/json
 
-### 2. Post Dodanie nowej wizyty 
+### 2. GET - Pobierz wizyty wybranego pacjenta/lekarza przez query string
+GET {{ClinicApi_HostAddress}}/api/Appointments?status=Scheduled&patientLastName=Kowalska
+Accept: application/json
+
+### 3. GET - Pobierz jedną istniejącą wizytę (ID 1)
+GET {{ClinicApi_HostAddress}}/api/Appointments/1
+Accept: application/json
+
+### 4. GET (TEST BŁĘDU) - Sprawdź 404 Not Found dla nieistniejącej wizyty
+GET {{ClinicApi_HostAddress}}/api/Appointments/9999
+Accept: application/json
+
+### 5. POST - Dodaj poprawną wizytę (Oczekiwane 201 Created)
 POST {{ClinicApi_HostAddress}}/api/Appointments
 Content-Type: application/json
 
 {
   "idPatient": 1,
-  "idDoctor": 1,
-  "appointmentDate": "2026-05-15T10:30:00",
+  "idDoctor": 2,
+  "appointmentDate": "2027-10-15T10:30:00",
   "reason": "Nowa wizyta kontrolna - ból pleców"
 }
 
-### 3. Put - Aktualizacja istniejace wizyty
+### 6. POST (TEST BŁĘDU) - Spróbuj dodać wizytę w przeszłości (Oczekiwane 400 Bad Request)
+POST {{ClinicApi_HostAddress}}/api/Appointments
+Content-Type: application/json
+
+{
+  "idPatient": 1,
+  "idDoctor": 2,
+  "appointmentDate": "2020-01-01T10:30:00",
+  "reason": "Wizyta w przeszłości"
+}
+
+### 7. POST (TEST BŁĘDU) - Konflikt terminu (Ten sam czas co w teście nr 5 - Oczekiwane 409 Conflict)
+POST {{ClinicApi_HostAddress}}/api/Appointments
+Content-Type: application/json
+
+{
+  "idPatient": 2,
+  "idDoctor": 2,
+  "appointmentDate": "2027-10-15T10:30:00",
+  "reason": "Próba zarejestrowania innego pacjenta na zajęty termin"
+}
+
+### 8. POST (TEST BŁĘDU) - Pusty opis wizyty (Oczekiwane 400 Bad Request)
+POST {{ClinicApi_HostAddress}}/api/Appointments
+Content-Type: application/json
+
+{
+  "idPatient": 1,
+  "idDoctor": 2,
+  "appointmentDate": "2027-11-20T11:00:00",
+  "reason": ""
+}
+
+### 9. PUT - Zaktualizuj istniejącą wizytę (Oczekiwane 200 OK lub 204 No Content)
 PUT {{ClinicApi_HostAddress}}/api/Appointments/1
 Content-Type: application/json
 
 {
   "idPatient": 1,
   "idDoctor": 1,
-  "appointmentDate": "2026-05-20T14:00:00",
+  "appointmentDate": "2027-12-01T14:00:00",
   "status": "Scheduled",
   "reason": "Zmiana terminu konsultacji",
   "internalNotes": "Pacjent zadzwonił i poprosił o późniejszą godzinę"
 }
 
-### 4. PUT (TEST BŁĘDU) - Próba zmiany daty zakończonej wizyty (ID 4)
+### 10. PUT (TEST BŁĘDU) - Próba zmiany daty zakończonej wizyty (Zakładamy, że ID 4 to Completed - Oczekiwane 409 Conflict)
 PUT {{ClinicApi_HostAddress}}/api/Appointments/4
 Content-Type: application/json
 
 {
   "idPatient": 1,
   "idDoctor": 1,
-  "appointmentDate": "2026-06-01T12:00:00",
+  "appointmentDate": "2027-12-05T12:00:00",
   "status": "Completed",
   "reason": "Próba zmiany daty po fakcie",
   "internalNotes": "To nie powinno przejść!"
 }
 
-### 5. DELETE (TEST BŁĘDU) - Próba usunięcia zakończonej wizyty (ID 4)
+### 11. PUT (TEST BŁĘDU) - Próba aktualizacji nieistniejącej wizyty (Oczekiwane 404 Not Found)
+PUT {{ClinicApi_HostAddress}}/api/Appointments/9999
+Content-Type: application/json
+
+{
+  "idPatient": 1,
+  "idDoctor": 1,
+  "appointmentDate": "2027-12-10T15:00:00",
+  "status": "Scheduled",
+  "reason": "Aktualizacja wizyty widmo"
+}
+
+### 12. DELETE - Usuń wizytę o statusie Scheduled (Zakładamy, że ID 2 to Scheduled - Oczekiwane 204 No Content)
+DELETE {{ClinicApi_HostAddress}}/api/Appointments/2
+
+### 13. DELETE (TEST BŁĘDU) - Próba usunięcia zakończonej wizyty (Zakładamy, że ID 4 to Completed - Oczekiwane 409 Conflict)
 DELETE {{ClinicApi_HostAddress}}/api/Appointments/4
+
+### 14. DELETE (TEST BŁĘDU) - Próba usunięcia nieistniejącej wizyty (Oczekiwane 404 Not Found)
+DELETE {{ClinicApi_HostAddress}}/api/Appointments/9999
